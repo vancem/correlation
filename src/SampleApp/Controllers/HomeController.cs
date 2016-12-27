@@ -1,35 +1,34 @@
-﻿using System.Net.Http;
-using System.Threading;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 
-namespace SampleApp.Controllers
+namespace WebApplication1.Controllers
 {
-    [MyFilter]
     public class HomeController : Controller
     {
-        private readonly ILogger<HomeController> logger;
-        private readonly HttpClient httpClient;
-
-        public HomeController(ILogger<HomeController> logger, HttpClient httpClient)
+        public IActionResult Index()
         {
-            this.logger = logger;
-            this.httpClient = httpClient;
+            return View();
         }
 
-        public async Task<IActionResult> Index(CancellationToken cancellationToken)
+        public IActionResult About()
         {
-            logger.LogInformation("index");
-            Task[] tasks = new Task[2];
-            for (int i = 0; i < tasks.Length; i++)
-            {
-                int i1 = i;
-                tasks[i] = httpClient.GetAsync($"http://127.0.0.1:5000/api/values/{i1}", cancellationToken);
-            }
+            ViewData["Message"] = "Your application description page.";
 
-            await Task.WhenAll(tasks).ConfigureAwait(false);
+            return View();
+        }
 
+        public IActionResult Contact()
+        {
+            ViewData["Message"] = "Your contact page.";
+
+            return View();
+        }
+
+        public IActionResult Error()
+        {
             return View();
         }
     }

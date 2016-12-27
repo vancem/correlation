@@ -1,16 +1,17 @@
 ﻿using System;
-using System.Diagnostics;
-using System.Net.Http;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Ext;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Correlation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Ext;
+using System.Diagnostics;
+using System.Reactive;
 
-
-namespace SampleApp
+namespace WebApplication1
 {
     public class Startup
     {
@@ -21,6 +22,12 @@ namespace SampleApp
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
                 .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true)
                 .AddEnvironmentVariables();
+
+            if (env.IsDevelopment())
+            {
+                // This will push telemetry data through Application Insights pipeline faster, allowing you to view results immediately.
+                builder.AddApplicationInsightsSettings(developerMode: true);
+            }
             Configuration = builder.Build();
         }
 
@@ -30,32 +37,31 @@ namespace SampleApp
         public void ConfigureServices(IServiceCollection services)
         {
             // Add framework services.
+            services.AddApplicationInsightsTelemetry(Configuration);
+
             services.AddMvc();
-            services.Configure<CorrelationConfigurationOptions>(Configuration.GetSection("Correlation"));
-            services.AddSingleton(new HttpClient());
-        }
-
-        private void SubsribeToSpanEvents(ILoggerFactory loggerFactory, IApplicationLifetime applicationLifetime)
-        {
-            var subscription = DiagnosticListener.AllListeners.Subscribe(delegate (DiagnosticListener listener)
-            {
-                if (listener.Name == "SpanDiagnosticListener")
-                    listener.Subscribe(new SpanObserver(loggerFactory));
-            });
-
-            applicationLifetime.ApplicationStopped.Register(() => subscription?.Dispose());
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IHostingEnvironment env, ILoggerFactory loggerFactory, IApplicationLifetime applicationLifetime)
+        public void Configure(IApplicationBuilder app, IHostingEnvironment env, ILoggerFactory loggerFactory)
         {
-            loggerFactory.WithFilter(new FilterLoggerSettings
+            loggerFactory.AddConsole(Configuration.GetSection("Logging"));
+            loggerFactory.AddDebug();
+
+#if true // ModfiedFromSample
+            DiagnosticListener.AllListeners.Subscribe(
+                delegate (DiagnosticListener listener)
                 {
-                    {"Microsoft", LogLevel.Warning},
-                })
-                .AddConsole(Configuration.GetSection("Logging"))
-                .AddDebug()
-                .AddElasicSearch();
+                    Debug.WriteLine("******* New DiagnosticsListener: {0}", listener.Name, null);
+                    listener.Subscribe(keyVal => Debug.WriteLine("** Write From {0}: {1} ", listener.Name, keyVal.Key));
+                });
+
+            // This is the only place currently where we need a 'hook'.  
+            // TODO need to remove the need for this.  
+            app.UseCorrelationInstrumentation();
+#endif 
+
+            app.UseApplicationInsightsRequestTelemetry();
 
             if (env.IsDevelopment())
             {
@@ -66,11 +72,11 @@ namespace SampleApp
             {
                 app.UseExceptionHandler("/Home/Error");
             }
+
+            app.UseApplicationInsightsExceptionTelemetry();
+
             app.UseStaticFiles();
 
-            SubsribeToSpanEvents(loggerFactory, applicationLifetime);
-
-            app.UseCorrelationInstrumentation();
             app.UseMvc(routes =>
             {
                 routes.MapRoute(

@@ -6,24 +6,72 @@ namespace System.Diagnostics
 {
     public class Activity : IDisposable
     {
+        /// <summary>
+        /// An operation name is a COARSEST name that is useful grouping/filtering. 
+        /// The name is typically a compile time constant.   Names of Rest APIs are 
+        /// reasonable, but arguments (e.g. specific accounts etc), should not be in
+        /// the name but rather in the tags.  
+        /// </summary>
         public string OperationName { get; private set; }
+        /// <summary>
+        /// This is an ID that is specific to a particular request.   Filtering
+        /// to a particular ID insures that you get only one request that matches.  
+        /// It is typically assigned the system itself. 
+        /// </summary>
         public string ID { get; private set; }
+        /// <summary>
+        /// The time that operation started.  Typcially when Start() is called 
+        /// (but you can pass a value to Start() if necessary.  
+        /// </summary>
         public DateTime StartTime { get; private set; }
+        /// <summary>
+        /// If the Activity has ended (Stop was called) then this is the delta
+        /// between start and end.   If the activity is not ended then this is 
+        /// TimeSpan.Zero.  
+        /// </summary>
         public TimeSpan Duration { get; private set; }
+        /// <summary>
+        /// If this activity was created from (caused by) another activity than this is 
+        /// the activity that created it.   It can be null if this is a 'root' 
+        /// activity that has no logical parent.  
+        /// </summary>
         public Activity Parent { get; private set; }
+
+        /// <summary>
+        /// Tags are string-string key-value pairs that represent information that will
+        /// be logged along with the Activity to the logging system.   This infomration
+        /// however is NOT passed on to the children of this activity.  (see Baggage)
+        /// </summary>
         public IEnumerable<KeyValuePair<string, string>> Tags { get { return _tags; } }
+        /// <summary>
+        /// Tags are string-string key-value pairs that represent information that will
+        /// be passed along to children of this activity.   Baggage is serialized 
+        /// when requests leave the process (along with the ID).   Typically Baggage is
+        /// used to do fine-grained control over logging of the activty and any children.  
+        /// In general, if you are not using the data at runtime, you should be using Tags 
+        /// instead. 
+        /// </summary>
         public IEnumerable<KeyValuePair<string, string>> Baggage { get { return _baggage; } }
+
+        // TODO do we need the ability to hang properties off the activity?  
 
         // Moderately Advanced APIs, only need when 
         /// <summary>
         /// The only thing you HAVE to provide to create a activity is the OperationName, however 
         /// the ID, StartTime and ParentID are filled in from context (Current). 
-        /// Normally 
+        /// After calling the desired 'With*' methods to update tags and baggage 
+        /// and then call 'Start' to start it and 'Stop' to stop it.   It is expected 
+        /// that both Start and Stop are called.  
         /// </summary>     
         public Activity(string operationName, string parentID = null)
         {
         }
 
+        /// <summary>
+        /// Update the current activity to have a tag with 'key' and value 'value'.
+        /// This shows up in the 'tags' eumeration.  
+        /// Returns 'this' for convinient chaining
+        /// </summary>
         public Activity WithTag(string key, string value)
         {
             _tags.AddFirst(new KeyValuePair<string, string>(key, value));
@@ -77,7 +125,7 @@ namespace System.Diagnostics
         }
         public static void Start(Activity activity)
         {
-            throw new NotImplementedException();
+            // throw new NotImplementedException();
         }
 
         public static void Stop(string operationName)
@@ -87,11 +135,13 @@ namespace System.Diagnostics
         public static void Stop(Activity activity)
         {
             // Ultimately call SetCurrent
-            throw new NotImplementedException();
+            // throw new NotImplementedException();
         }
 
         public static void SetCurrnet(Activity incommingActivity)
         {
+            if (!CurrentEnabled)
+                return;
             var changing = CurrentChanging;
             if (changing != null)
                 changing(incommingActivity);
@@ -100,7 +150,7 @@ namespace System.Diagnostics
 
         /// <summary>
         /// Returns the current operation (Activity) for the current thread.  This flows 
-        /// across async calls.   Can return null if CurrnetActivity not enabled.  
+        /// across async calls.   Can return null if CurrentEnabled is false.  
         /// </summary>
         public static Activity Current
         {
@@ -234,4 +284,21 @@ namespace Other
         }
     }
 }
+#endif
+
+
+#if ISSUES 
+
+Do Tags/Baggage include HTTP prefixes? 
+What things can be null?
+How to deal with parents that are off machine (where do we put parentID?
+
+Work through Activity.CurrentEnabled. 
+Can Current be null? (yes, if tracking is off)
+Work through not using Current.  
+Work through Filtering (do we need it?) 
+Work through Sampling
+Is Activity Complete? 
+Work through multi-process scenario. 
+
 #endif

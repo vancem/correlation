@@ -26,8 +26,7 @@ namespace Microsoft.Extensions.Correlation
         {
             if (options.InstrumentOutgoingRequests)
             {
-                return new HttpDiagnosticListenerObserver(
-                    new EndpointFilter(options.EndpointFilter.Endpoints, options.EndpointFilter.Allow));
+                return new HttpDiagnosticListenerObserver();
             }
             return null;
         }

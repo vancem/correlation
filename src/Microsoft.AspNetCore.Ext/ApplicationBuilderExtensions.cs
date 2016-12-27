@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Correlation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using System;
 
 namespace Microsoft.AspNetCore.Ext
 {
@@ -24,10 +25,7 @@ namespace Microsoft.AspNetCore.Ext
             app.UseMiddleware<CorrelationMiddleware>();
 
             var options = app.ApplicationServices.GetService(typeof(IOptions<CorrelationConfigurationOptions>)) as IOptions<CorrelationConfigurationOptions>;
-
-            var instrumentaion = CorrelationHttpInstrumentation.Enable(
-                options?.Value ?? new CorrelationConfigurationOptions());
-
+            IDisposable instrumentaion = CorrelationHttpInstrumentation.Enable(options?.Value ?? new CorrelationConfigurationOptions());
             var appLifetime = app.ApplicationServices.GetRequiredService(typeof(IApplicationLifetime)) as IApplicationLifetime;
             appLifetime?.ApplicationStopped.Register(() => instrumentaion?.Dispose());
 
