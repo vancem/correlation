@@ -191,7 +191,7 @@ namespace System.Diagnostics
 
 // TODO Remove this.  
 // This represents code that needs to be modified elsewhere 
-#if true 
+#if false 
 namespace Other
 {
     using System;
@@ -267,7 +267,7 @@ namespace Other
 
             string parentID = idStringValues[0];
 
-            Activity incommingActivity = new Activity("IncommingHttpRequest", parentID);
+            Activity incommingActivity = new Activity("IncomingHttpRequest", parentID);
             if (headers.ContainsKey(BaggageHeaderName))
             {
                 foreach (var keyValue in headers)
@@ -285,7 +285,6 @@ namespace Other
     }
 }
 #endif
-
 
 #if ISSUES 
 

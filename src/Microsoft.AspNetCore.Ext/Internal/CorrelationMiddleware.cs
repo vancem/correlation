@@ -29,7 +29,7 @@ namespace Microsoft.AspNetCore.Ext.Internal
             IHeaderDictionary headers = request.Headers;
             string parentID = headers[ActivityIdHeaderName];
 
-            Activity incommingActivity = new Activity("IncommingHttpRequest", parentID);
+            Activity incommingActivity = new Activity("IncomingHttp", parentID);
             if (headers.ContainsKey(BaggageHeaderName))
             {
                 foreach (var keyValue in headers)
@@ -44,9 +44,9 @@ namespace Microsoft.AspNetCore.Ext.Internal
             // but the code that created the HTTP request.  
             Activity.SetCurrnet(incommingActivity);
 
-            if (IncommingDiagnosticsSource.IsEnabled("IncommingHttpStart"))
+            if (IncommingDiagnosticsSource.IsEnabled("IncomingHttpStart"))
             {
-                IncommingDiagnosticsSource.Write("IncommingHttpStart",
+                IncommingDiagnosticsSource.Write("IncomingHttpStart",
                     new
                     {
                         Request = request,
@@ -57,9 +57,9 @@ namespace Microsoft.AspNetCore.Ext.Internal
             }
             await next.Invoke(context);
 
-            if (IncommingDiagnosticsSource.IsEnabled("IncommingHttpStop"))
+            if (IncommingDiagnosticsSource.IsEnabled("IncomingHttpStop"))
             {
-                IncommingDiagnosticsSource.Write("IncommingHttpStop",
+                IncommingDiagnosticsSource.Write("IncomingHttpStop",
                     new
                     {
                         Request = request,
@@ -69,7 +69,6 @@ namespace Microsoft.AspNetCore.Ext.Internal
                     });
             }
             Activity.Stop(incommingActivity);
-
         }
     }
 }

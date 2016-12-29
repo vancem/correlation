@@ -53,7 +53,8 @@ namespace WebApplication1
                 delegate (DiagnosticListener listener)
                 {
                     Debug.WriteLine("******* New DiagnosticsListener: {0}", listener.Name, null);
-                    listener.Subscribe(keyVal => Debug.WriteLine("** Write From {0}: {1} ", listener.Name, keyVal.Key));
+                    Console.WriteLine("******* New DiagnosticsListener: {0}", listener.Name, null);
+                    listener.Subscribe(keyVal => Console.WriteLine("** Write From {0}: {1} ", listener.Name, keyVal.Key));
                 });
 
             // This is the only place currently where we need a 'hook'.  
