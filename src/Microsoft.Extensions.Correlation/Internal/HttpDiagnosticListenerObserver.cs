@@ -50,8 +50,7 @@ namespace Microsoft.Extensions.Correlation.Internal
                         //We should set Activity.Current to new activity
                         var activity = new Activity("Outgoing request")
                             .WithTag("Uri", request.RequestUri.ToString())
-                            .WithTag("Method", request.Method.ToString())
-                            .WithTag("ParentId", Activity.Current.Id);
+                            .WithTag("Method", request.Method.ToString());
                         activity.Start(DateTimeStopwatch.GetTime((long)timestamp));
 
                         request.Headers.Add(headerMap.ActivityIdHeaderName, activity.Id);
@@ -61,8 +60,12 @@ namespace Microsoft.Extensions.Correlation.Internal
                         }
 
                         request.Properties["activity"] = activity;
-                        //this code may run synchronously
-                        //Let's restore parent operation context so next HttpClient call will inherit proper context
+                        
+                        // TODO FIX NOW.
+                        // There seems to be a bug in the AsyncLocals where an AsyncLocal set 
+                        // in an async method 'leaks' into its caller (which is logically a
+                        // separate task.   For now we don't modify the current activity
+                        // That is we set it back to the parent agressively.  
                         Activity.SetCurrent(activity.Parent);
                     }
                 }
@@ -77,7 +80,11 @@ namespace Microsoft.Extensions.Correlation.Internal
                     if (filter.Validate(response.RequestMessage.RequestUri))
                     {
                         var activity = response.RequestMessage.Properties["activity"] as Activity;
-                        Activity.SetCurrent(activity);
+                        // TODO FIX NOW 
+                        // We want to put the activity back to before the Outgoing http request activity
+                        // but we already did this agressively above to work around a bug in the 
+                        // async local implementation. 
+                        // Activity.SetCurrent(activity.Parent);    
                         if (activity != null)
                         {
                             activity.WithTag("StatusCode", response.StatusCode.ToString());

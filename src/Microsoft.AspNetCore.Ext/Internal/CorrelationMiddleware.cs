@@ -23,7 +23,7 @@ namespace Microsoft.AspNetCore.Ext.Internal
             {
                 if (header.Key == headerMap.ActivityIdHeaderName)
                 {
-                    activity.WithTag("ParentId", header.Value);
+                    activity.WithParentId(header.Value);
                 }
                 else
                 {
