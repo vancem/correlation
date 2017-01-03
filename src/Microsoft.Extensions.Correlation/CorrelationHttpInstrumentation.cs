@@ -10,13 +10,15 @@ namespace Microsoft.Extensions.Correlation
         {
             if (options.InstrumentOutgoingRequests)
             {
-                var observer = new HttpDiagnosticListenerObserver(
-                    new EndpointFilter(options.EndpointFilter.Endpoints, options.EndpointFilter.Allow),
-                    options.Headers);
-                return DiagnosticListener.AllListeners.Subscribe(delegate(DiagnosticListener listener)
+                return DiagnosticListener.AllListeners.Subscribe(delegate (DiagnosticListener listener)
                 {
                     if (listener.Name == "HttpHandlerDiagnosticListener")
+                    {
+                        var observer = new HttpDiagnosticListenerObserver(
+                            new EndpointFilter(options.EndpointFilter.Endpoints, options.EndpointFilter.Allow),
+                            options.Headers, listener);
                         listener.Subscribe(observer);
+                    }
                 });
             }
             return new NoopDisposable();
@@ -24,7 +26,7 @@ namespace Microsoft.Extensions.Correlation
 
         private class NoopDisposable : IDisposable
         {
-            public void Dispose() {}
+            public void Dispose() { }
         }
     }
 }

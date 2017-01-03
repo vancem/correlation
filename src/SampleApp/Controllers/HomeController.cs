@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 
 namespace SampleApp.Controllers
 {
@@ -23,8 +24,11 @@ namespace SampleApp.Controllers
             Task[] tasks = new Task[2];
             for (int i = 0; i < tasks.Length; i++)
             {
+                Debug.WriteLine($"Before Async Call Current Activity {Activity.Current.Id}");
                 int i1 = i;
                 tasks[i] = httpClient.GetAsync($"http://127.0.0.1:5000/api/values/{i1}", cancellationToken);
+
+                Debug.WriteLine($"After Async Call Current Activity {Activity.Current.Id}");
             }
 
             await Task.WhenAll(tasks).ConfigureAwait(false);

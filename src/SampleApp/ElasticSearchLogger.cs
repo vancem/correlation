@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics.Activity;
+using System.Diagnostics;
 using System.Threading;
 using Microsoft.Extensions.Logging;
 using Nest;
@@ -80,7 +80,7 @@ namespace SampleApp
             if (activity != null)
             {
                 document["OperationName"] = activity.OperationName;
-                document["OperationStarted"] = activity.StartTimeUtc;
+                // document["OperationStarted"] = activity.StartTimeUtc;
                 foreach (var kv in activity.GetProperties())
                     document[kv.Key] = kv.Value;
             }
@@ -108,12 +108,12 @@ namespace SampleApp
 
     public static class SpanExtenstions
     {
-        public static IEnumerable<KeyValuePair<string, string>> GetProperties(this Activity span)
+        public static IEnumerable<KeyValuePair<string, string>> GetProperties(this Activity activity)
         {
             var result = new List<KeyValuePair<string, string>>();
-            result.AddRange(span.Baggage);
-            result.AddRange(span.Tags);
-            result.Add(new KeyValuePair<string, string>("Id", span.Id));
+            result.AddRange(activity.Baggage);
+            // result.AddRange(span.Tags);
+            result.Add(new KeyValuePair<string, string>("Id", activity.Id));
             return result;
         }
 

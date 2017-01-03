@@ -5,7 +5,7 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Activity;
+using System.Diagnostics;
 using System.Net.Http;
 using System.Reflection;
 
@@ -15,10 +15,13 @@ namespace Microsoft.Extensions.Correlation.Internal
     {
         private readonly EndpointFilter filter;
         private readonly CorrelationConfigurationOptions.HeaderOptions headerMap;
-        public HttpDiagnosticListenerObserver(EndpointFilter filter, CorrelationConfigurationOptions.HeaderOptions headerMap)
+        private readonly DiagnosticListener listener;
+        public HttpDiagnosticListenerObserver(EndpointFilter filter, CorrelationConfigurationOptions.HeaderOptions headerMap,
+            DiagnosticListener listener)
         {
             this.filter = filter;
             this.headerMap = headerMap;
+            this.listener = listener;
         }
 
         public void OnNext(KeyValuePair<string, object> value)
@@ -37,67 +40,50 @@ namespace Microsoft.Extensions.Correlation.Internal
 
             if (value.Key == "System.Net.Http.Request")
             {
-                var request = (HttpRequestMessage) value.Value.GetProperty("Request");
-                var timestamp = value.Value.GetProperty("Timestamp"); //long
+                var request = (HttpRequestMessage)value.Value.GetProperty("Request");
 
-                if (request != null && timestamp != null)
+                if (request != null)
                 {
                     if (filter.Validate(request.RequestUri))
                     {
-                        //we start new activity here: it's parent will be Current.Id, it's Id will be generated
-                        //new Id will become parent of incoming request on downstream service.
-                        //new Id may be logged by user in activity starting/stopping event
-                        //We should set Activity.Current to new activity
-                        var activity = new Activity("Outgoing request")
-                            .WithTag("Uri", request.RequestUri.ToString())
-                            .WithTag("Method", request.Method.ToString());
-                        activity.Start(DateTimeStopwatch.GetTime((long)timestamp));
+                        //we start new activity here
+                        var activity = new Activity("Http_Out");
+                        listener.Start(activity, value.Value);
 
+                        // Attach our ID and Baggage to the outgoing Http Request.
                         request.Headers.Add(headerMap.ActivityIdHeaderName, activity.Id);
                         foreach (var baggage in activity.Baggage)
-                        {
                             request.Headers.Add(headerMap.GetHeaderName(baggage.Key), baggage.Value);
-                        }
 
-                        request.Properties["activity"] = activity;
-                        
                         // TODO FIX NOW.
                         // There seems to be a bug in the AsyncLocals where an AsyncLocal set 
                         // in an async method 'leaks' into its caller (which is logically a
                         // separate task.   For now we don't modify the current activity
                         // That is we set it back to the parent agressively.  
-                        Activity.SetCurrent(activity.Parent);
+                        listener.Stop("Http_Out", value.Value);
                     }
                 }
             }
             else if (value.Key == "System.Net.Http.Response")
             {
-                var response = (HttpResponseMessage) value.Value.GetProperty("Response");
-                var timestamp = value.Value.GetProperty("TimeStamp"); //long
-
+                var response = (HttpResponseMessage)value.Value.GetProperty("Response");
                 if (response != null)
                 {
                     if (filter.Validate(response.RequestMessage.RequestUri))
                     {
-                        var activity = response.RequestMessage.Properties["activity"] as Activity;
                         // TODO FIX NOW 
                         // We want to put the activity back to before the Outgoing http request activity
                         // but we already did this agressively above to work around a bug in the 
                         // async local implementation. 
-                        // Activity.SetCurrent(activity.Parent);    
-                        if (activity != null)
-                        {
-                            activity.WithTag("StatusCode", response.StatusCode.ToString());
-                            activity.Stop(DateTimeStopwatch.GetTime((long)timestamp) - activity.StartTimeUtc);
-                        }
+                        // listener.Stop("Http_Out", value.Value);
                     }
                 }
             }
         }
 
-        public void OnCompleted(){}
+        public void OnCompleted() { }
 
-        public void OnError(Exception error){}
+        public void OnError(Exception error) { }
     }
 
     internal static class PropertyExtensions
