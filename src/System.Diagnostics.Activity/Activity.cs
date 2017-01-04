@@ -1,11 +1,10 @@
 ﻿using System.Collections.Generic;
-using System.Text;
 using System.Threading;
 
 namespace System.Diagnostics
 {
     // TODO: Consider renaming to DiagnosticActivity 
-    public class Activity : IDisposable
+    public class Activity
     {
         /// <summary>
         /// An operation name is a COARSEST name that is useful grouping/filtering. 
@@ -14,31 +13,34 @@ namespace System.Diagnostics
         /// the name but rather in the tags.  
         /// </summary>
         public string OperationName { get; }
+
         /// <summary>
         /// This is an ID that is specific to a particular request.   Filtering
         /// to a particular ID insures that you get only one request that matches.  
         /// It is typically assigned the system itself. 
         /// </summary>
         public string Id { get; private set; }
-#if SPAN_API
+
         /// <summary>
         /// The time that operation started.  Typcially when Start() is called 
         /// (but you can pass a value to Start() if necessary.  This use UTC (Greenwitch Mean Time)
         /// </summary>
         public DateTime StartTimeUtc { get; private set; }
+
         /// <summary>
         /// If the Activity has ended (Stop was called) then this is the delta
         /// between start and end.   If the activity is not ended then this is 
         /// TimeSpan.Zero.  
         /// </summary>
         public TimeSpan Duration { get; private set; }
+
         /// <summary>
         /// If the Activity that created this activity is  from the same process you can get 
         /// that Activit with Parent.   However this can be null if the Activity has no
         /// parent (a root activity) or if the Parent is from outside the process.  (see ParentId for more)
         /// </summary>
-#endif 
         public Activity Parent { get; private set; }
+
         /// <summary>
         /// If the parent for this activity comes from outside the process, the activity
         /// does not have a Parent Activity but MAY have a ParentId (which was serialized from
@@ -46,7 +48,7 @@ namespace System.Diagnostics
         /// Note this can be null if this is a root Activity (it has no parent)
         /// </summary>
         public string ParentId { get; private set; }
-#if SPAN_API
+
         /// <summary>
         /// Tags are string-string key-value pairs that represent information that will
         /// be logged along with the Activity to the logging system.   This infomration
@@ -62,7 +64,7 @@ namespace System.Diagnostics
                     yield return tags.keyValue;
             }
         }
-#endif
+
         /// <summary>
         /// Tags are string-string key-value pairs that represent information that will
         /// be passed along to children of this activity.   Baggage is serialized 
@@ -75,8 +77,9 @@ namespace System.Diagnostics
         {
             get
             {
-                for (var baggage = _baggage; baggage != null; baggage = baggage.Next)
-                    yield return baggage.keyValue;
+                for (var activity = this; activity != null; activity = activity.Parent)
+                    for (var baggage = activity._baggage; baggage != null; baggage = baggage.Next)
+                        yield return baggage.keyValue;
             }
         }
 
@@ -103,7 +106,7 @@ namespace System.Diagnostics
         {
             OperationName = operationName;
         }
-#if SPAN_API
+
         /// <summary>
         /// Update the Activity to have a tag with an additional 'key' and value 'value'.
         /// This shows up in the 'Tags' eumeration.   It is meant for information that
@@ -116,7 +119,7 @@ namespace System.Diagnostics
             _tags = new KeyValueListNode() { keyValue = new KeyValuePair<string, string>(key, value), Next = _tags };
             return this;
         }
-#endif
+
         /// <summary>
         /// Update the Activity to have baggage with an additional 'key' and value 'value'.
         /// This shows up in the 'Baggage' eumeration as well as the 'GetBaggageItem' API.
@@ -144,27 +147,27 @@ namespace System.Diagnostics
             return this;
         }
 
-        public override string ToString()
+        /// <summary>
+        /// Update the Activity to set start time in UTC (Greenwitch Mean Time)
+        /// </summary>
+        /// <param name="startTimeUtc"></param>
+        /// <returns></returns>
+        public Activity WithStartTime(DateTime startTimeUtc)
         {
-            return $"operation: {OperationName}, Id={Id}, Baggage: {{{dictionaryToString(Baggage)}}}";
-        }
-
-        public void Dispose() {
-            /* TODO This method violates the 'instance methods don't update Activity.Current' invarient.   
-            * Do we care?  Is IDisposable Useful enough given the desire to also send a stop event on Stop?, 
-            * if so should it have a DiagnosticSource field so that it can log the stop?.   
-            * For now I am keeping it simple and not supporting IDisposable */
-            // Stop(this);
-            throw new NotSupportedException();      // TODO either remove the interface or implement this. 
+            StartTimeUtc = startTimeUtc;
+            return this;
         }
 
         /* Static Methods */
         /* Currently we have layering going on.   Activity methods do NOT depend on statics (in particular Activity.Current)
          * so any method that manipulates that variable is a static where we pass in the activity.   
          * If this becomes unintuitive, we shoudl reconsider, but I want to see how it goes as I think it will work out
-         * as MOST callers shoudl be calling DiagnosticSource.Start() and DiagnosticSource.Stop() */
+         * as MOST callers should be calling DiagnosticSource.Start() and DiagnosticSource.Stop() */
         public static Activity Start(Activity activity)
         {
+            if (activity.Id != null)
+                throw new InvalidOperationException("Trying to start an Activity that was already started");
+
             if (activity.ParentId == null)
             {
                 var parent = Current;
@@ -175,66 +178,35 @@ namespace System.Diagnostics
                 }
             }
 
-#if SPAN_API
-                if (startTime == default(DateTime))
-                    startTime = DateTime.UtcNow;
-                activity.StartTimeUtc = startTime;
-#endif
+            if (activity.StartTimeUtc == default(DateTime))
+                activity.StartTimeUtc = DateTime.UtcNow;
+
             activity.Id = activity.GenerateId();
 
             _current.Value = activity;
-            // ActivityStarting?.Invoke();
             return activity;
         }
 
-        public static void Stop(Activity activity)
+        public static void Stop(Activity activity, DateTime stopTime = default(DateTime))
         {
-            Debug.Assert(activity.Id != null, "Tring to stop a Activity that was not started");
+            if (activity.Id == null)
+                throw new InvalidOperationException("Trying to stop an Activity that was not started");
+
             if (!activity.isFinished)
             {
                 activity.isFinished = true;
-                // ActivityStopping?.Invoke();
+                if (stopTime == default(DateTime))
+                    stopTime = DateTime.UtcNow;
+                activity.Duration = stopTime - activity.StartTimeUtc;
                 _current.Value = activity.Parent;
-            }
-        }
-
-        public static void Stop(string operationName)
-        {
-            var cur = Activity.Current;
-            while(cur != null)
-            {
-                if (cur.OperationName == operationName)
-                    Stop(cur);
-                cur = cur.Parent;
             }
         }
 
         /// <summary>
         /// Returns the current operation (Activity) for the current thread.  This flows 
-        /// across async calls.   Can return null if CurrentEnabled is false.  
+        /// across async calls.
         /// </summary>
         public static Activity Current => _current.Value;
-
-        /* TODO we may not need these, if the advice is to always log a DiagnosticSource event on start and stop
-         * As is these  probably are too verbose since filtering is not well supported. 
-         */
-#if ACTVITY_EVENTS
-        //We expect users to be interested only about activity start and stop events: such events may be logged
-        //Current activity could be changed without being started or stopped
-        //Current changing event would require subscriber to guess what happened and how it should be logged
-        //It would also mean that user will be notified about new activity only when new one will set, which may never happen
-        /// <summary>
-        /// Notifies subscribers about activity start
-        /// Activity.Current is set to activity being started
-        /// </summary>
-        public static event Action ActivityStarting;
-
-        /// <summary>
-        /// Notifies subscribers about activity stop
-        /// Activity.Current is set to activity being stopped
-        /// </summary>
-        public static event Action ActivityStopping;
-#endif 
 
 #region private 
 
@@ -284,8 +256,8 @@ namespace System.Diagnostics
         }
 
         // Used to generate an ID 
-        int _currentChildId;            // A unique number for all children of this activity.  
-        static int _currentRootId;      // A unique number inside the appdomain.
+        long _currentChildId;            // A unique number for all children of this activity.  
+        static long _currentRootId;      // A unique number inside the appdomain.
         static string _uniqPrefix;      // A unique prefix that represents the machine/process/appdomain
 
 
@@ -300,22 +272,9 @@ namespace System.Diagnostics
 
         private KeyValueListNode _tags;
         private KeyValueListNode _baggage;
+        //TODO: NETSTANDARD1.1
         private static readonly AsyncLocal<Activity> _current = new AsyncLocal<Activity>();
         private bool isFinished;
-
-        private string dictionaryToString(IEnumerable<KeyValuePair<string, string>> dictionary)
-        {
-            var sb = new StringBuilder();
-            foreach (var kv in dictionary)
-            {
-                if (kv.Value != null)
-                    sb.Append($"{kv.Key}={kv.Value},");
-            }
-            if (sb.Length > 0)
-                sb.Remove(sb.Length - 1, 1);
-            return sb.ToString();
-        }
-
 #endregion // private
     }
 }

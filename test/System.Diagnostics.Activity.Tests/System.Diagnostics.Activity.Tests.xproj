@@ -6,14 +6,17 @@
   </PropertyGroup>
   <Import Project="..\..\targets\DotNet\Microsoft.DotNet.Props" />
   <PropertyGroup Label="Globals">
-    <ProjectGuid>5953a709-c584-4744-834f-079c38a83e8c</ProjectGuid>
-    <RootNamespace>System.Diagnostics</RootNamespace>
+    <ProjectGuid>126f751f-2d21-46a8-81a3-3ff4ef8e8309</ProjectGuid>
+    <RootNamespace>System.Diagnostics.Tests</RootNamespace>
     <BaseIntermediateOutputPath Condition="'$(BaseIntermediateOutputPath)'=='' ">.\obj</BaseIntermediateOutputPath>
     <OutputPath Condition="'$(OutputPath)'=='' ">.\bin\</OutputPath>
-    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.7</TargetFrameworkVersion>
   </PropertyGroup>
   <PropertyGroup>
     <SchemaVersion>2.0</SchemaVersion>
   </PropertyGroup>
+  <ItemGroup>
+    <Service Include="{82a7f48d-3b50-4b1e-b82e-3ada8210c358}" />
+  </ItemGroup>
   <Import Project="..\..\targets\DotNet\Microsoft.DotNet.targets" />
 </Project>

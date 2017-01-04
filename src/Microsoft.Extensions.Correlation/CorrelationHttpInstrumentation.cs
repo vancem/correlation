@@ -6,27 +6,16 @@ namespace Microsoft.Extensions.Correlation
 {
     public class CorrelationHttpInstrumentation
     {
-        public static IDisposable Enable(CorrelationConfigurationOptions options)
+        public static IDisposable Enable()
         {
-            if (options.InstrumentOutgoingRequests)
+            return DiagnosticListener.AllListeners.Subscribe(delegate (DiagnosticListener listener)
             {
-                return DiagnosticListener.AllListeners.Subscribe(delegate (DiagnosticListener listener)
+                if (listener.Name == "HttpHandlerDiagnosticListener")
                 {
-                    if (listener.Name == "HttpHandlerDiagnosticListener")
-                    {
-                        var observer = new HttpDiagnosticListenerObserver(
-                            new EndpointFilter(options.EndpointFilter.Endpoints, options.EndpointFilter.Allow),
-                            options.Headers, listener);
-                        listener.Subscribe(observer);
-                    }
-                });
-            }
-            return new NoopDisposable();
-        }
-
-        private class NoopDisposable : IDisposable
-        {
-            public void Dispose() { }
+                    var observer = new HttpDiagnosticListenerObserver(new DiagnosticListener("HttpActivityListener"));
+                    listener.Subscribe(observer);
+                }
+            });
         }
     }
 }

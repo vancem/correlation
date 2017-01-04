@@ -6,16 +6,18 @@ namespace Microsoft.Extensions.Correlation
     public class DateTimeStopwatch
     {
         //last machine boot time if Stopwatch is HighResolution
-        private static DateTime _stopwatchStartTime = DateTime.UtcNow.AddSeconds(-1 * Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency);
+        private static DateTime _stopwatchStartTime = Stopwatch.IsHighResolution ? 
+            DateTime.UtcNow.AddSeconds(-1 * Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency) :
+            DateTime.UtcNow;
 
         public static DateTime GetTime(long ticks)
         {
-            return _stopwatchStartTime.AddSeconds(ticks / (double)Stopwatch.Frequency);
+            return Stopwatch.IsHighResolution ? _stopwatchStartTime.AddSeconds(ticks / (double)Stopwatch.Frequency) : new DateTime(ticks);
         }
 
         public static DateTime GetTime()
         {
-            return GetTime(Stopwatch.GetTimestamp());
+            return Stopwatch.IsHighResolution ? GetTime(Stopwatch.GetTimestamp()) : DateTime.UtcNow;
         }
     }
 }

@@ -1,6 +1,4 @@
-﻿using System.Diagnostics;
-
-namespace System.Diagnostics
+﻿namespace System.Diagnostics
 {
     // These should go in Microsoft.Diagnostics.DiagnosticSource.dll.   
     // TODO should these be real methods are left as extension methods?
@@ -12,21 +10,16 @@ namespace System.Diagnostics
             self.Write(activity.OperationName + "Start", args);
             return activity;
         }
+
         public static Activity Start(this DiagnosticSource self, string activityName, object args)
         {
-            return self.Start(new Activity(activityName + "Start"), args);
+            return self.Start(new Activity(activityName), args);
         }
 
-        public static void Stop(this DiagnosticSource self, Activity activity, object args)
+        public static void Stop(this DiagnosticSource self, Activity activity, object args, DateTime stopTimeUtc = default(DateTime))
         {
             self.Write(activity.OperationName + "Stop", args);
-            Activity.Stop(activity);
-        }
-
-        public static void Stop(this DiagnosticSource self, string activityName, object args)
-        {
-            self.Write(activityName + "Stop", args);
-            Activity.Stop(activityName);
+            Activity.Stop(activity, stopTimeUtc);
         }
     }
 }

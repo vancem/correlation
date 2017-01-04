@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Ext;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Correlation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
@@ -31,7 +30,6 @@ namespace SampleApp
         {
             // Add framework services.
             services.AddMvc();
-            services.Configure<CorrelationConfigurationOptions>(Configuration.GetSection("Correlation"));
             services.AddSingleton(new HttpClient());
         }
 
@@ -40,15 +38,9 @@ namespace SampleApp
         {
 #if true // New 
             loggerFactory
-#if false
-                .WithFilter(new FilterLoggerSettings
-                {
-                    {"Microsoft", LogLevel.Warning},
-                })
-#endif 
                 .AddConsole(Configuration.GetSection("Logging"))
                 .AddDebug()
-                // .AddElasicSearch()
+                .AddElasicSearch()
                 ;
 #endif
             if (env.IsDevelopment())
@@ -63,7 +55,6 @@ namespace SampleApp
             app.UseStaticFiles();
 
 #if true // New
-            app.UseMiddleware<SamplingMiddleware>();
             app.UseCorrelationInstrumentation();
             var logger = loggerFactory.CreateLogger("Activity");
 
@@ -71,7 +62,6 @@ namespace SampleApp
             {
                 if (listener.Name == "Microsoft.AspNetCore.Http")
                 {
-
                     GC.KeepAlive("");   // Place to put a breakpoint
                     listener.Subscribe(delegate (KeyValuePair<string, object> value)
                     {
@@ -79,16 +69,12 @@ namespace SampleApp
                             logger.LogInformation($"**** Event: {value.Key} ActivityName: {Activity.Current.OperationName} ID: {Activity.Current.Id} ");
                     });
                 }
-                else if (listener.Name == "HttpHandlerDiagnosticListener")
+                else if (listener.Name == "HttpActivityListener")
                 {
                     GC.KeepAlive("");   // Place to put a breakpoint
-                    listener.Subscribe(delegate (KeyValuePair<string, object> value)
-                    {
-                        if (value.Key.StartsWith("Http_Out"))
-                            logger.LogInformation($"**** Event: {value.Key} ActivityName: {Activity.Current.OperationName} ID: {Activity.Current.Id} ");
-                    });
+                    listener.Subscribe(new HttpActivityObserver(loggerFactory), s => !s.Contains("localhost:9200"));
                 }
-            });
+            } );
 #endif 
 
             app.UseMvc(routes =>
@@ -97,6 +83,26 @@ namespace SampleApp
                     name: "default",
                     template: "{controller=Home}/{action=Index}/{id?}");
             });
+        }
+    }
+
+    class HttpActivityObserver : IObserver<KeyValuePair<string, object>>
+    {
+        private readonly ILogger<HttpActivityObserver> logger;
+
+        public HttpActivityObserver(ILoggerFactory loggerFactory)
+        {
+            logger = loggerFactory.CreateLogger<HttpActivityObserver>();
+        }
+
+        public void OnCompleted(){}
+
+        public void OnError(Exception error){}
+
+        public void OnNext(KeyValuePair<string, object> value)
+        {
+            if (value.Key.StartsWith("Http_Out"))
+                logger.LogInformation($"**** Event: {value.Key} ActivityName: {Activity.Current.OperationName} ID: {Activity.Current.Id} ");
         }
     }
 }

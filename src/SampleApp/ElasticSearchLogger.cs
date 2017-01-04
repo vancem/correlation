@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Threading;
 using Microsoft.Extensions.Logging;
 using Nest;
 using LogLevel = Microsoft.Extensions.Logging.LogLevel;
@@ -58,14 +57,7 @@ namespace SampleApp
             if (!initialized) return;
 
             var activity = Activity.Current;
-            //this is an example of custom context propagation
 
-            if (activity != null)
-            {
-                var isSampledStr = activity.GetBaggageItem("isSampled");
-                if (isSampledStr != bool.TrueString)
-                    return;
-            }
             //send to elasticsearch
             var document = new Dictionary<string,object>
             {
