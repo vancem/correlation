@@ -13,19 +13,13 @@ namespace Microsoft.Extensions.Correlation.Internal
 {
     internal class HttpDiagnosticListenerObserver : IObserver<KeyValuePair<string, object>>
     {
-        private readonly DiagnosticListener listener;
-        private PropertyFetch requestFetcher;
-        private PropertyFetch responseFetcher;
-        private PropertyFetch requestTimestampFetcher;
-        private PropertyFetch responseTimestampFetcher;
-
         public HttpDiagnosticListenerObserver(DiagnosticListener listener)
         {
             this.listener = listener;
-            requestFetcher = null;
-            requestTimestampFetcher = null;
-            responseFetcher = null;
-            responseTimestampFetcher = null;
+            requestFetcher = new PropertyFetcher("Request");
+            requestTimestampFetcher = new PropertyFetcher("Timestamp");
+            responseFetcher = new PropertyFetcher("Response");
+            responseTimestampFetcher = new PropertyFetcher("TimeStamp");
         }
 
         public void OnNext(KeyValuePair<string, object> value)
@@ -35,12 +29,6 @@ namespace Microsoft.Extensions.Correlation.Internal
 
             if (value.Key == "System.Net.Http.Request")
             {
-                if (requestFetcher == null)
-                    requestFetcher = PropertyFetch.FetcherForProperty(value.Value.GetPropertyInfo("Request"));
-
-                if (requestTimestampFetcher == null)
-                    requestTimestampFetcher = PropertyFetch.FetcherForProperty(value.Value.GetPropertyInfo("Timestamp"));
-
                 var request = (HttpRequestMessage)requestFetcher.Fetch(value.Value);
                 var timestamp = (long)requestTimestampFetcher.Fetch(value.Value);
 
@@ -70,11 +58,6 @@ namespace Microsoft.Extensions.Correlation.Internal
             }
             else if (value.Key == "System.Net.Http.Response")
             {
-                if (responseFetcher == null)
-                    responseFetcher = PropertyFetch.FetcherForProperty(value.Value.GetPropertyInfo("Response"));
-                if (responseTimestampFetcher == null)
-                    responseTimestampFetcher = PropertyFetch.FetcherForProperty(value.Value.GetPropertyInfo("TimeStamp"));
-
                 var response = (HttpResponseMessage)responseFetcher.Fetch(value.Value);
                 var timestamp = (long)responseTimestampFetcher.Fetch(value.Value);
                 if (response != null)
@@ -95,52 +78,86 @@ namespace Microsoft.Extensions.Correlation.Internal
 
         public void OnError(Exception error) { }
 
-        //see https://github.com/dotnet/corefx/blob/master/src/System.Diagnostics.DiagnosticSource/src/System/Diagnostics/DiagnosticSourceEventSource.cs
-        class PropertyFetch
+        #region private
+       
+        private readonly DiagnosticListener listener;
+        private readonly PropertyFetcher requestFetcher;
+        private readonly PropertyFetcher responseFetcher;
+        private readonly PropertyFetcher requestTimestampFetcher;
+        private readonly PropertyFetcher responseTimestampFetcher;
+
+        private class PropertyFetcher
         {
-            /// <summary>
-            /// Create a property fetcher from a .NET Reflection PropertyInfo class that
-            /// represents a property of a particular type.  
-            /// </summary>
-            public static PropertyFetch FetcherForProperty(PropertyInfo propertyInfo)
+            public PropertyFetcher(string propertyName)
             {
-                if (propertyInfo == null)
-                    return new PropertyFetch();     // returns null on any fetch.
-
-                var typedPropertyFetcher = typeof(TypedFetchProperty<,>);
-                var instantiatedTypedPropertyFetcher = typedPropertyFetcher.GetTypeInfo().MakeGenericType(
-                    propertyInfo.DeclaringType, propertyInfo.PropertyType);
-                return (PropertyFetch)Activator.CreateInstance(instantiatedTypedPropertyFetcher, propertyInfo);
+                this.propertyName = propertyName;
             }
 
-            /// <summary>
-            /// Given an object, fetch the property that this propertyFech represents. 
-            /// </summary>
-            public virtual object Fetch(object obj) { return null; }
-
-            #region private 
-
-            private class TypedFetchProperty<TObject, TProperty> : PropertyFetch
+            public object Fetch(object obj)
             {
-                public TypedFetchProperty(PropertyInfo property)
+                if (innerFetcher == null)
                 {
-                    _propertyFetch = (Func<TObject, TProperty>)property.GetMethod.CreateDelegate(typeof(Func<TObject, TProperty>));
+                    innerFetcher = PropertyFetch.FetcherForProperty(obj.GetType().GetTypeInfo().GetDeclaredProperty(propertyName));
                 }
-                public override object Fetch(object obj)
-                {
-                    return _propertyFetch((TObject)obj);
-                }
-                private readonly Func<TObject, TProperty> _propertyFetch;
+
+                return innerFetcher?.Fetch(obj);
             }
+
+            #region private
+
+            private PropertyFetch innerFetcher;
+            private readonly string propertyName;
+            
+            //see https://github.com/dotnet/corefx/blob/master/src/System.Diagnostics.DiagnosticSource/src/System/Diagnostics/DiagnosticSourceEventSource.cs
+            class PropertyFetch
+            {
+                /// <summary>
+                /// Create a property fetcher from a .NET Reflection PropertyInfo class that
+                /// represents a property of a particular type.  
+                /// </summary>
+                public static PropertyFetch FetcherForProperty(PropertyInfo propertyInfo)
+                {
+                    if (propertyInfo == null)
+                        return new PropertyFetch(); // returns null on any fetch.
+
+                    var typedPropertyFetcher = typeof(TypedFetchProperty<,>);
+                    var instantiatedTypedPropertyFetcher = typedPropertyFetcher.GetTypeInfo().MakeGenericType(
+                        propertyInfo.DeclaringType, propertyInfo.PropertyType);
+                    return (PropertyFetch) Activator.CreateInstance(instantiatedTypedPropertyFetcher, propertyInfo);
+                }
+
+                /// <summary>
+                /// Given an object, fetch the property that this propertyFech represents. 
+                /// </summary>
+                public virtual object Fetch(object obj)
+                {
+                    return null;
+                }
+
+                #region private 
+
+                private class TypedFetchProperty<TObject, TProperty> : PropertyFetch
+                {
+                    public TypedFetchProperty(PropertyInfo property)
+                    {
+                        _propertyFetch =
+                            (Func<TObject, TProperty>)
+                            property.GetMethod.CreateDelegate(typeof(Func<TObject, TProperty>));
+                    }
+
+                    public override object Fetch(object obj)
+                    {
+                        return _propertyFetch((TObject) obj);
+                    }
+
+                    private readonly Func<TObject, TProperty> _propertyFetch;
+                }
+
+                #endregion
+            }
+
             #endregion
         }
-    }
-
-    internal static class PropertyExtensions
-    {
-        public static PropertyInfo GetPropertyInfo(this object _this, string propertyName)
-        {
-            return _this.GetType().GetTypeInfo().GetDeclaredProperty(propertyName);
-        }
+        #endregion
     }
 }
